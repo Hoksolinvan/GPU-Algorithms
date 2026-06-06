@@ -1,11 +1,18 @@
 #include "cuda_runtime.h"
+#include <cmath>
+#include <cstdlib>
+#include <cstdio>
 
-#define COUNT 8
+
+
+#define COUNT 4 
 
 __global__
-void hillis_steele(int*input,int* output, int n){
+void hillis_steele_inclusive_scan(int*input,int* output, int n){
 
-  int threadId = threadIdx.x;
+  int threadId = blockIdx.x * blockDim.x + threadIdx.x;
+
+
 
   if(threadId>n){
     return;
@@ -18,7 +25,8 @@ void hillis_steele(int*input,int* output, int n){
     }
 
     else{
-    input[threadId+i
+      int previous = threadId - std::pow(2,i-1);
+    input[threadId]+=input[previous];
 
     }
 
@@ -28,24 +36,52 @@ void hillis_steele(int*input,int* output, int n){
       __syncthreads();
   }
 
-  
+  output[threadId]=input[threadId];
+
+  return;
 
 }
 
-int main(){
+__global__
+void hillis_steele_exclusive_scan(int* input, int* buffer,int n){
+
+  int threadId = blockIdx.x * blockDim.x + threadIdx.x;
 
 
+   
+  if(threadId > n){
+    return;
+  }
+
+
+  for(int i=1; i<n; i*=2){
+
+
+    if(threadId < i){
+     buffer[threadId]=buffer[threadId];
+    }
+    else{
+        int offset = threadId - std::pow(2,i-1);
+      buffer[threadId]+=input[threadId-offset];
+    }
+
+    __syncthreads();
+  }
+
+
+  return;
+
+}
+
+int main(){       
   int *host_pointer = (int *)malloc(sizeof(int)*COUNT);
   int *device_pointer;
   int *output_device_pointer;
-  host_pointer[0]=1;
-  host_pointer[1]=2;
-  host_pointer[2]=3;
-  host_pointer[3]=4;
-  host_pointer[4]=5;
-  host_pointer[5]=6;
-  host_pointer[6]=7;
-  host_pointer[7]=8;
+  
+
+  for(int i=0; i<COUNT;i++){
+    host_pointer[i]=i;
+  }
   
 
   cudaMalloc(&device_pointer, COUNT*sizeof(int));
@@ -53,13 +89,49 @@ int main(){
 
   cudaMemcpy(device_pointer,host_pointer,COUNT*sizeof(int),cudaMemcpyHostToDevice);
 
-  hillis_steele<<<1,1024>>>(device_pointer,output_device_pointer,COUNT);
+  hillis_steele_inclusive_scan<<<1,1024>>>(device_pointer,output_device_pointer,COUNT);
+
+
+  cudaMemcpy(host_pointer,device_pointer,COUNT*sizeof(int),cudaMemcpyDeviceToHost);
+
+  printf("Inclusive Prefix Sum (Hillis-Steele): ");
+  for(int i=0; i<COUNT;i++){
+    printf("%d ",host_pointer[i]);
+  }
+  printf("\n");
 
 
   
+ int *host_pointer_2 = (int *)malloc(COUNT*sizeof(int));
+ int *device_pointer_2;
+ int *output_device_pointer_2;
+
+ for(int i=0; i<COUNT;i++){
+  host_pointer_2[i]=i;
+ }
+
+ cudaMalloc(&device_pointer_2, COUNT*sizeof(int));
+ cudaMalloc(&output_device_pointer_2,COUNT*sizeof(int));
+
+ cudaMemcpy(device_pointer_2, host_pointer_2,COUNT*sizeof(int),cudaMemcpyHostToDevice);
+
+ hillis_steele_exclusive_scan<<<1,1024>>>(device_pointer_2,output_device_pointer_2,COUNT);
+
+ cudaMemcpy(host_pointer_2,output_device_pointer_2,COUNT*sizeof(int),cudaMemcpyDeviceToHost);
+
+ printf("Exclusive Prefix Sum (Hillis-Steele): ");
+ for(int i=0; i<COUNT;i++){
+  printf("%d ",host_pointer_2[i]);
+ }
+ printf("\n");
+
+
+  cudaFree(output_device_pointer_2);
+  cudaFree(device_pointer_2);
   cudaFree(device_pointer);
   cudaFree(output_device_pointer);
   free(host_pointer);
+  free(host_pointer_2);
 
 
   return 0;
