@@ -1,17 +1,18 @@
 #include "cuda_runtime.h"
 #include <cmath>
 #include <cstdlib>
+#include <iostream>
 #include <cstdio>
+#include <chrono>
 
 
-
-#define COUNT 4 
+#define COUNT 40000
 
 __global__
 void hillis_steele_inclusive_scan(int*input,int* output, int n){
 
   int threadId = blockIdx.x * blockDim.x + threadIdx.x;
-
+   
 
 
   if(threadId>n){
@@ -73,6 +74,13 @@ void hillis_steele_exclusive_scan(int* input, int* buffer,int n){
 
 }
 
+
+
+
+
+
+}
+
 int main(){       
   int *host_pointer = (int *)malloc(sizeof(int)*COUNT);
   int *device_pointer;
@@ -88,15 +96,19 @@ int main(){
   cudaMalloc(&output_device_pointer,COUNT*sizeof(int));
 
   cudaMemcpy(device_pointer,host_pointer,COUNT*sizeof(int),cudaMemcpyHostToDevice);
-
+auto start = std::chrono::high_resolution_clock::now();
   hillis_steele_inclusive_scan<<<1,1024>>>(device_pointer,output_device_pointer,COUNT);
-
+  cudaDeviceSynchronize();
+auto end = std::chrono::high_resolution_clock::now();
+auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+  std::cout << duration.count() << " ms\n";
+  
 
   cudaMemcpy(host_pointer,device_pointer,COUNT*sizeof(int),cudaMemcpyDeviceToHost);
 
   printf("Inclusive Prefix Sum (Hillis-Steele): ");
   for(int i=0; i<COUNT;i++){
-    printf("%d ",host_pointer[i]);
+    //printf("%d ",host_pointer[i]);
   }
   printf("\n");
 
@@ -114,16 +126,39 @@ int main(){
  cudaMalloc(&output_device_pointer_2,COUNT*sizeof(int));
 
  cudaMemcpy(device_pointer_2, host_pointer_2,COUNT*sizeof(int),cudaMemcpyHostToDevice);
-
+start = std::chrono::high_resolution_clock::now();
  hillis_steele_exclusive_scan<<<1,1024>>>(device_pointer_2,output_device_pointer_2,COUNT);
+ cudaDeviceSynchronize(); 
+  end = std::chrono::high_resolution_clock::now();
+ duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+  std::cout << duration.count() << " ms\n";
+  
 
  cudaMemcpy(host_pointer_2,output_device_pointer_2,COUNT*sizeof(int),cudaMemcpyDeviceToHost);
 
  printf("Exclusive Prefix Sum (Hillis-Steele): ");
  for(int i=0; i<COUNT;i++){
-  printf("%d ",host_pointer_2[i]);
+  //printf("%d ",host_pointer_2[i]);
  }
  printf("\n");
+
+
+
+
+ int arr[COUNT];
+
+ for(int i=0; i<COUNT;i++){
+  arr[i]=i;
+ }
+
+  start = std::chrono::high_resolution_clock::now();
+
+ for(int i=1; i<COUNT;i++){
+    arr[i]+=arr[i-1];
+ }
+  end = std::chrono::high_resolution_clock::now();
+ duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+  std::cout << duration.count() << " ms\n";
 
 
   cudaFree(output_device_pointer_2);
