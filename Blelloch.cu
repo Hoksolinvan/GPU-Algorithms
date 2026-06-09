@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <cstdio>
 #include <chrono>
+#include <iostream>
 
 
 
@@ -11,49 +12,42 @@
 
 
 
-__global__void blelloch_scan(int *input, int *output, int n){
+__global__
+void blelloch_scan(int *input, int *output, int n ){
 
 
 int thid = threadIdx.x;
 int offset = 1;
 
-
-for(int i=n>> 1; i>0;i>>=1){
-  __syncthreads();
-
-  if(thid < i){
-    int ai = offset * (2 * thid + 1) - 1;
-    int bi = offset * (2*thid + 2)-1;
-
-
-    input[bi]+=input[ai];
-  }
-
-  offset *=2;
+for(int i= n >> 1; i>0; i>>=1){
+    __syncthreads();
+    if(thid < i){
+        int ai= offset * (2 * thid + 1) - 1;
+        int bi = offset * (2*thid + 2) - 1;
+        input[bi]+=input[ai];
+    }
+    offset *= 2;
 }
 
 
-if(thid==0){
-  input[n-1]=0;
+if(thid == 0)
+{
+    input[n-1]=0;
 }
 
+for(int i=1; i<n; i*=2){
 
-for(int i=1; i<n;i*=2){
-  offset>>=1;
-  __syncthreads();
+    offset>>=1;
+    __syncthreads();
+    if(thid < i){
+        int   ai = offset * (2 * thid + 1) - 1;
+        int   bi = offset * (2 * thid + 2) - 1;
 
-  if(thid < i){
-    int ai = offset * (2*thid+1)-1;
-    int bi = offset * (2*thid+2)-1;
-
-    auto t = input[ai];
-    input[ai]=input[bi];
-    input[bi]+=t;
-  }
-
-
+        auto t = input[ai];
+        input[ai]=input[bi];
+        input[bi]+=t;
+    }
 }
-
 
 
 __syncthreads();
@@ -61,6 +55,7 @@ output[2*thid]=input[2*thid];
 output[2*thid+1]=input[2*thid+1];
 
 }
+
 
 
 int main(){
@@ -82,7 +77,7 @@ int main(){
 
 auto start = std::chrono::high_resolution_clock::now();
 
-  blelloch_scan<<<1,1024>>>(host_pointer,device_pointer,COUNT);
+  blelloch_scan<<<1,COUNT/2>>>(device_pointer,output_device_pointer,COUNT);
 
 auto end = std::chrono::high_resolution_clock::now();
 auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
