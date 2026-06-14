@@ -1,18 +1,7 @@
 #include "cuda_runtime.h"
-#include <cmath>
-#include <cstdlib>
-#include <cstdio>
-#include <chrono>
-#include <iostream>
 
 
-
-#define COUNT 4 
-
-
-
-
-__global__
+__device__
 void blelloch_scan(int *input, int *output, int n ){
 
 
@@ -58,40 +47,40 @@ output[2*thid+1]=input[2*thid+1];
 
 
 
-int main(){
+// int main(){
 
-  int *host_pointer = (int *)malloc(sizeof(int)*COUNT);
-  int *device_pointer;
-  int *output_device_pointer;
+//   int *host_pointer = (int *)malloc(sizeof(int)*COUNT);
+//   int *device_pointer;
+//   int *output_device_pointer;
 
 
 
-  cudaMalloc(&device_pointer,sizeof(int)*COUNT);
-  cudaMalloc(&output_device_pointer,sizeof(int)*COUNT);
+//   cudaMalloc(&device_pointer,sizeof(int)*COUNT);
+//   cudaMalloc(&output_device_pointer,sizeof(int)*COUNT);
 
-  for(int i=0; i<COUNT;i++){
-    host_pointer[i]=i;
-  }
+//   for(int i=0; i<COUNT;i++){
+//     host_pointer[i]=i;
+//   }
 
-  cudaMemcpy(device_pointer,host_pointer,sizeof(int)*COUNT,cudaMemcpyHostToDevice);
+//   cudaMemcpy(device_pointer,host_pointer,sizeof(int)*COUNT,cudaMemcpyHostToDevice);
 
-auto start = std::chrono::high_resolution_clock::now();
+// auto start = std::chrono::high_resolution_clock::now();
 
-  blelloch_scan<<<1,COUNT/2>>>(device_pointer,output_device_pointer,COUNT);
+//   blelloch_scan<<<1,COUNT/2>>>(device_pointer,output_device_pointer,COUNT);
 
-auto end = std::chrono::high_resolution_clock::now();
-auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-  std::cout << duration.count() << " ms\n";
+// auto end = std::chrono::high_resolution_clock::now();
+// auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+//   std::cout << duration.count() << " ms\n";
   
-  cudaMemcpy(host_pointer,output_device_pointer,sizeof(int)*COUNT,cudaMemcpyDeviceToHost);
+//   cudaMemcpy(host_pointer,output_device_pointer,sizeof(int)*COUNT,cudaMemcpyDeviceToHost);
 
 
-  for(int i=0; i<COUNT;i++){
-    printf("%d ",host_pointer[i]);
-  }
+//   for(int i=0; i<COUNT;i++){
+//     printf("%d ",host_pointer[i]);
+//   }
 
-  free(host_pointer);
-  cudaFree(device_pointer);
-  cudaFree(output_device_pointer);
-  return 0;
-}
+//   free(host_pointer);
+//   cudaFree(device_pointer);
+//   cudaFree(output_device_pointer);
+//   return 0;
+// }
