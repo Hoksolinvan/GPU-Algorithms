@@ -3,7 +3,7 @@
 
 
 
-__global__
+__device__
 void hillis_steele_inclusive_scan(int*input,int* output, int n){
 
   int threadId = blockIdx.x * blockDim.x + threadIdx.x;

@@ -1,5 +1,5 @@
 #include "cuda_runtime.h"
-
+#include "Blelloch.hpp"
 
 __device__
 void blelloch_scan(int *input, int *output, int n ){
@@ -42,6 +42,55 @@ for(int i=1; i<n; i*=2){
 __syncthreads();
 output[2*thid]=input[2*thid];
 output[2*thid+1]=input[2*thid+1];
+
+}
+
+
+
+
+__device__
+void inclusive_blelloch_scan(int *input, int original_one, int original_zero, int *output, int n ){
+
+
+int thid = threadIdx.x;
+int offset = 1;
+original_zero = input[thid*2];
+original_one = input[thid*2 + 1];
+
+for(int i= n >> 1; i>0; i>>=1){
+    __syncthreads();
+    if(thid < i){
+        int ai= offset * (2 * thid + 1) - 1;
+        int bi = offset * (2*thid + 2) - 1;
+        input[bi]+=input[ai];
+    }
+    offset *= 2;
+}
+
+
+if(thid == 0)
+{
+    input[n-1]=0;
+}
+
+for(int i=1; i<n; i*=2){
+
+    offset>>=1;
+    __syncthreads();
+    if(thid < i){
+        int   ai = offset * (2 * thid + 1) - 1;
+        int   bi = offset * (2 * thid + 2) - 1;
+
+        auto t = input[ai];
+        input[ai]=input[bi];
+        input[bi]+=t;
+    }
+}
+
+
+__syncthreads();
+output[2*thid]=input[2*thid]+original_zero;
+output[2*thid+1]=input[2*thid+1]+original_one;
 
 }
 

@@ -13,7 +13,7 @@ int main() {
 
 
 
-std::vector<int> counting_sort(std::vector<int>& input,int current_max){
+std::vector<int> counting_sort(std::vector<int>& input, int current_max){
     
     
     

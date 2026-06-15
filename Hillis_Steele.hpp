@@ -10,7 +10,7 @@
 #define COUNT 40000
 
 
-__global__ void hillis_steele_inclusive_scan(int*input,int* output, int n);
+__device__ void hillis_steele_inclusive_scan(int*input,int* output, int n);
 
 
 __global__
