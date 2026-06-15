@@ -2,6 +2,7 @@
 #include "../Blelloch.hpp"
 #include <thrust/device_ptr.h>
 #include <vector>
+#include <vector>
 #include <thrust/extrema.h>
 #include <cmath>
 
