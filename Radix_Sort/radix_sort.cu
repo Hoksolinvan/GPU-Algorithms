@@ -11,7 +11,7 @@
 const int RADIX = 2;
 const int total_thread_count = 2;
 
-__global__ void counting_sort(int *input, int * global_sum, int *global_memory, int current_max, int current_bit_level, int n){
+__global__ void counting_sort(int *input, int * global_sum, int *global_memory, int *global_memory_2, int current_bit_level, int n){
 
     // configuration
     int threadId = threadIdx.x;
@@ -27,42 +27,41 @@ __global__ void counting_sort(int *input, int * global_sum, int *global_memory, 
         buckets[input[i] & (1 << current_bit_level) ? 1 : 0]++;
     }
 
-
-
     for(int i=0; i<RADIX;i++){
         global_memory[threadId*RADIX + i]=buckets[i];
     }
-    
-
     __syncthreads();
 
 
     // scan bucket
-    int first_term_sum = 0;
-
-    
+  
     //inclusive scan results is stored in global_sum array
-    inclusive_blelloch_scan<<<1,2/2>>>(buckets,buckets[1], buckets[0], exclusive_scan_result, RADIX);
-    for(int i=0; i<RADIX;i++){
-        global_sum[threadId*RADIX + i]=exclusive_scan_result[i];
-    }
+    blelloch_scan<<<1,1>>>(buckets,exclusive_scan_result, RADIX);
+    
 
-
-    //
-    for(int i=0; i< RADIX;i++){
-        first_term_sum+=global_memory[threadId];    
-    }
+    int first_term_sum_zero=exclusive_scan_result[threadId*RADIX];
+    int first_term_sum_one=exclusive_scan_result[threadId*RADIX+1];    
+    
     
     
 
-    int second_term_sum = 0;
+    int second_term_sum_zero = 0;
+    int second_term_sum_one = 0;
 
     for(int i=0; i<total_thread_count; i++){
-        second_term_sum+=global_memory[i*RADIX + threadId];
+        second_term_sum_zero+=global_memory[i*RADIX+0];
+    }
+
+    for(int i=0; i<total_thread_count;i++){
+        second_term_sum_one+=global_memory[i*RADIX+1];
     }
 
 
-    int index_position = first_term_sum + second_term_sum;
+   int index_position_zero = first_term_sum_zero+second_term_sum_zero;
+   int index_position_one = first_term_sum_one+second_term_sum_one;
+
+    global_memory_2[index_position_zero]=buckets[0];
+    global_memory_2[index_position_one]=buckets[1];
 
     __syncthreads();
 
@@ -77,14 +76,26 @@ __global__ void counting_sort(int *input, int * global_sum, int *global_memory, 
 int* radixSort(int *input, int n){
 
 
+    int *global_sum;
+    int *global_memory;
+    int *global_memory_2;
+
+    cudaMalloc(&global_sum,sizeof(int)*n*total_thread_count);
+    cudaMalloc(&global_memory,sizeof(int)*n*total_thread_count);
+    cudaMalloc(&global_memory_2,sizeof(int)*n*total_thread_count);
 
     for(int i=0; i<32;i++){
 
-        counting_sort<<<1,total_thread_count>>>();
+        counting_sort<<<1,total_thread_count>>>(input,global_sum,global_memory,global_memory_2,i,n);
 
     }
 
 
+
+
+    cudaFree(global_memory);
+    cudaFree(global_sum);
+    cudaFree(global_memory_2);
     return input;
 }
 
