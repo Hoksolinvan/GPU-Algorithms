@@ -17,6 +17,7 @@ __global__ void counting_sort(int *input, int * global_sum, int *global_memory, 
     int threadId = threadIdx.x;
     uint32_t mask = 1 << current_bit_level;
     int* buckets = (int *)malloc(sizeof(int)*RADIX);
+    memset(buckets,0,sizeof(int)*RADIX);
     int* exclusive_scan_result = (int *)malloc(sizeof(int) * RADIX);
     int end = std::pow(2,RADIX)-1;
 
@@ -28,42 +29,44 @@ __global__ void counting_sort(int *input, int * global_sum, int *global_memory, 
     }
 
     for(int i=0; i<RADIX;i++){
-        global_memory[threadId*RADIX + i]=buckets[i];
+        global_memory[i*total_thread_count + threadId] = buckets[i];
     }
     __syncthreads();
 
 
     // scan bucket
-  
-    //inclusive scan results is stored in global_sum array
-    blelloch_scan<<<1,1>>>(buckets,exclusive_scan_result, RADIX);
     
-
-    int first_term_sum_zero=exclusive_scan_result[threadId*RADIX];
-    int first_term_sum_one=exclusive_scan_result[threadId*RADIX+1];    
-    
-    
-    
-
-    int second_term_sum_zero = 0;
-    int second_term_sum_one = 0;
-
-    for(int i=0; i<total_thread_count; i++){
-        second_term_sum_zero+=global_memory[i*RADIX+0];
-    }
-
-    for(int i=0; i<total_thread_count;i++){
-        second_term_sum_one+=global_memory[i*RADIX+1];
-    }
+        //inclusive scan results is stored in global_sum array
+            blelloch_scan(global_memory, exclusive_scan_result, total_thread_count*RADIX);
 
 
-   int index_position_zero = first_term_sum_zero+second_term_sum_zero;
-   int index_position_one = first_term_sum_one+second_term_sum_one;
+        
+            int total_zero = exclusive_scan_result[total_thread_count-1]+global_memory[total_thread_count-1];
+            // for(int i=0; i<total_thread_count;i++){
+            //     total_zero += global_memory[i*RADIX+0];
 
-    global_memory_2[index_position_zero]=buckets[0];
-    global_memory_2[index_position_one]=buckets[1];
+            // }
+
+
+            //0 2 4
+
+            
+            int prior_zero = exclusive_scan_result[threadId];
+            int prior_one = exclusive_scan_result[total_thread_count+threadId];
+
+            int offset_zero = prior_zero;
+            int offset_one = total_zero+prior_one;
+            
+
+
 
     __syncthreads();
+
+
+    for(int i=(n/total_thread_count)*threadId; i<(n/total_thread_count)*(threadId+1);i++){
+
+
+    }
 
 
 
@@ -80,9 +83,9 @@ int* radixSort(int *input, int n){
     int *global_memory;
     int *global_memory_2;
 
-    cudaMalloc(&global_sum,sizeof(int)*n*total_thread_count);
-    cudaMalloc(&global_memory,sizeof(int)*n*total_thread_count);
-    cudaMalloc(&global_memory_2,sizeof(int)*n*total_thread_count);
+    cudaMalloc(&global_sum,sizeof(int)*RADIX*total_thread_count);
+    cudaMalloc(&global_memory,sizeof(int)*RADIX*total_thread_count);
+    cudaMalloc(&global_memory_2,sizeof(int)*n);
 
     for(int i=0; i<32;i++){
 
