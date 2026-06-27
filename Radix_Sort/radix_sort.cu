@@ -109,18 +109,30 @@ int* radixSort(int *input, int n){
     int *buffer;
 
     cudaMalloc(&buffer,sizeof(int)*RADIX*total_thread_count);
+<<<<<<< HEAD
     cudaMalloc(&input_array,sizeof(int)*n);
+=======
+    cudaMalloc(&input_array,sizeof(int)*5);
+>>>>>>> d6ee451629c0dcb9d76b184ad7cfbf173e86d902
     cudaMalloc(&global_sum,sizeof(int)*RADIX*total_thread_count);
     cudaMalloc(&global_memory,sizeof(int)*RADIX*total_thread_count);
     cudaMalloc(&global_memory_2,sizeof(int)*n);
 
+<<<<<<< HEAD
     cudaMemcpy(input_array,input,sizeof(int)*n, cudaMemcpyHostToDevice);
+=======
+    cudaMemcpy(input_array,input,sizeof(int)*5, cudaMemcpyHostToDevice);
+>>>>>>> d6ee451629c0dcb9d76b184ad7cfbf173e86d902
     for(int i=0; i<32; i++){
     counting_sort<<<1,total_thread_count>>>(input_array, global_sum, global_memory, global_memory_2, buffer, i, n);
     cudaDeviceSynchronize();
     std::swap(input_array, global_memory_2);   // output becomes next pass's input
 }
+<<<<<<< HEAD
     cudaMemcpy(input,input_array,sizeof(int)*n, cudaMemcpyDeviceToHost);
+=======
+    cudaMemcpy(input,input_array,sizeof(int)*5, cudaMemcpyDeviceToHost);
+>>>>>>> d6ee451629c0dcb9d76b184ad7cfbf173e86d902
 
 
 
@@ -143,6 +155,7 @@ int main(){
     input_array[1]=0;
     input_array[2]=1;
     input_array[3]=3;
+<<<<<<< HEAD
     input_array[4]=2;
     input_array[5]=6;
     input_array[6]=4;
@@ -152,6 +165,13 @@ int main(){
     int *output = radixSort(input_array,8);
 
     for(int i=0; i<8;i++){
+=======
+
+
+    int *output = radixSort(input_array,4);
+
+    for(int i=0; i<total_thread_count*RADIX;i++){
+>>>>>>> d6ee451629c0dcb9d76b184ad7cfbf173e86d902
         printf("%d ",output[i]);
     }
 
