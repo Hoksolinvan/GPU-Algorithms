@@ -4,7 +4,7 @@
 
 
 #define CCCL_IGNORE_MSVC_TRADITIONAL_PREPROCESSOR_WARNING
-const int RADIX = 2;
+// const int RADIX = 2;
 const int total_thread_count = 2;
 const int bitSize = 4;
 
@@ -12,20 +12,20 @@ __global__ void counting_sort(int *input, int * global_sum, int *global_memory, 
 
     // configuration
     int threadId = threadIdx.x;
-    uint32_t mask = 0xf << current_bit_level;
+    uint32_t mask = 0xf << (4*current_bit_level);
 
 
-    int buckets[(1<<(bitSize+1))] = {0};
+    int buckets[(1<<(bitSize))] = {0};
 
    //thread0 : 0 ; 2
    //thread1 : 2 ; 4    
 
     // histogram construction
     for(int i=(n/total_thread_count)*threadId; i<(n/total_thread_count)*(threadId+1);i++){
-        buckets[input[i] & (mask)]++;
+        buckets[(input[i] & (mask))>>(4*current_bit_level)]++;  
     }
 
-    for(int i=0; i<(1<<(bitSize+1));i++){
+    for(int i=0; i<(1<<(bitSize));i++){
         global_memory[i*total_thread_count + threadId] = buckets[i];
     }
 
@@ -35,7 +35,7 @@ __global__ void counting_sort(int *input, int * global_sum, int *global_memory, 
     //     printf("ThreadId %d = Bit position %d = : %d \n",threadId, current_bit_level, buckets[i]);
     // }
    
-    // for(int i=0; i<RADIX; i++){
+    // for(int i=0; i<(1<<4); i++){
     //    printf("ThreadId %d = Bit position %d = : %d \n",threadId, current_bit_level, global_memory[i*total_thread_count + threadId]);
     // }
     // printf("\n");
@@ -45,17 +45,17 @@ __global__ void counting_sort(int *input, int * global_sum, int *global_memory, 
     // scan bucket
 
         //inclusive scan results is stored in global_sum array
-            blelloch_scan(global_memory, buffer, total_thread_count*(1<<(bitSize+1)));
+            blelloch_scan(global_memory, buffer, total_thread_count*(1<<(bitSize)));
 
-           // __syncthreads();
+           __syncthreads();
         //     if(current_bit_level <=0 && threadId == 1){
-        //     for(int i=0; i<total_thread_count*RADIX; i++){
+        //     for(int i=0; i<(1<<4)*2; i++){
         //          printf("ThreadId %d = Bit position %d = : %d \n",threadId, current_bit_level, buffer[i]);
         //     }
         // }
 
         
-            int total_zero = buffer[total_thread_count];
+            // int total_zero = buffer[total_thread_count];
             // int total_zero = exclusive_scan_result[total_thread_count]+global_memory[total_thread_count-1];
 
             // for(int i=0; i<total_thread_count;i++){
@@ -78,13 +78,18 @@ __global__ void counting_sort(int *input, int * global_sum, int *global_memory, 
             for(int i=0; i<(1 << 5);i++){
                 offset_array[i]=buffer[total_thread_count*i +threadId];
             }
-
+            
 
            
-            // if(current_bit_level==0){
+            if(current_bit_level==0 && threadId==6){
 
-            //     printf("ThreadId %d : total_zero %d : prior_zero %d : prior_one %d\n",threadId, total_zero,prior_zero,prior_one);
-            // }
+                printf("ThreadId %d \n",threadId);
+
+                for(int i=0; i<(1 << 5);i++){
+                    printf("%d \n",offset_array[i]);
+                }
+                printf("\n");
+            }
 
 
 
@@ -92,7 +97,7 @@ __global__ void counting_sort(int *input, int * global_sum, int *global_memory, 
 
 
     for(int i=(n/total_thread_count)*threadId; i<(n/total_thread_count)*(threadId+1);i++){
-        int digit = input[i] & (mask);
+        int digit = (input[i] & (mask)) >> (4 * current_bit_level);
 
         global_memory_2[offset_array[digit]]=input[i];
         offset_array[digit]++;
@@ -118,13 +123,14 @@ __global__ void counting_sort(int *input, int * global_sum, int *global_memory, 
 
     // }
 
-    __syncthreads();
 
 
 }   
 
 
 int* radixSort(int *input, int n){
+    // 1, 0, 1, 3, 2, 6, 4, 3
+    // 8
 
     int *input_array;
     int *global_sum;
@@ -132,15 +138,15 @@ int* radixSort(int *input, int n){
     int *global_memory_2;
     int *buffer;
 
-    cudaMalloc(&buffer,sizeof(int)*RADIX*total_thread_count);
+    cudaMalloc(&buffer,sizeof(int)*(1 << 4)*total_thread_count);
     cudaMalloc(&input_array,sizeof(int)*n);
-    cudaMalloc(&global_sum,sizeof(int)*RADIX*total_thread_count);
-    cudaMalloc(&global_memory,sizeof(int)*RADIX*total_thread_count);
+    cudaMalloc(&global_sum,sizeof(int)*(1 << 4)*total_thread_count);
+    cudaMalloc(&global_memory,sizeof(int)*(1 << 4)*total_thread_count);
     cudaMalloc(&global_memory_2,sizeof(int)*n);
 
     cudaMemcpy(input_array,input,sizeof(int)*n, cudaMemcpyHostToDevice);
     for(int i=0; i<(32/bitSize); i++){
-    counting_sort<<<1,total_thread_count>>>(input_array, global_sum, global_memory, global_memory_2, buffer, i, n);
+    counting_sort<<<1,16>>>(input_array, global_sum, global_memory, global_memory_2, buffer, i, n);
     cudaDeviceSynchronize();
     std::swap(input_array, global_memory_2);   // output becomes next pass's input
 }

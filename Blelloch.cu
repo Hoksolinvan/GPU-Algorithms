@@ -42,6 +42,25 @@ for(int i=1; i<n; i*=2){
 __syncthreads();
 output[2*thid]=input[2*thid];
 output[2*thid+1]=input[2*thid+1];
+// output[0]=input[0];
+// output[1]=input[1];
+// output[2]=input[2];
+// output[3]=input[3];
+
+
+// for(int offset=0; offset<(n);offset+=2){
+
+//     output[2*thid+(2*offset)]=input[2*thid+(2*offset)];
+//     output[2*thid+(2*offset)+1]=input[2*thid+(2*offset)+1];
+// }
+
+// n/2 == 8
+
+// output[0]=input[0];
+// output[1]=input[1];
+// output[2] = input[2];
+// output[3] = input[3];
+// output[]
 
 }
 
