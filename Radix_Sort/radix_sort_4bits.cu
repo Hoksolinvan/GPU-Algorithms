@@ -8,7 +8,7 @@
 const int total_thread_count = 2;
 const int bitSize = 4;
 
-__global__ void counting_sort(int *input, int * global_sum, int *global_memory, int *global_memory_2, int *buffer, int current_bit_level, int n){
+__global__ void counting_sort(int *input, int *global_memory, int *global_memory_2, int *buffer, int current_bit_level, int n){
 
     // configuration
     int threadId = threadIdx.x;
@@ -133,20 +133,18 @@ int* radixSort(int *input, int n){
     // 8
 
     int *input_array;
-    int *global_sum;
     int *global_memory;
     int *global_memory_2;
     int *buffer;
 
     cudaMalloc(&buffer,sizeof(int)*(1 << 4)*total_thread_count);
     cudaMalloc(&input_array,sizeof(int)*n);
-    cudaMalloc(&global_sum,sizeof(int)*(1 << 4)*total_thread_count);
     cudaMalloc(&global_memory,sizeof(int)*(1 << 4)*total_thread_count);
     cudaMalloc(&global_memory_2,sizeof(int)*n);
 
     cudaMemcpy(input_array,input,sizeof(int)*n, cudaMemcpyHostToDevice);
     for(int i=0; i<(32/bitSize); i++){
-    counting_sort<<<1,16>>>(input_array, global_sum, global_memory, global_memory_2, buffer, i, n);
+    counting_sort<<<1,16>>>(input_array, global_memory, global_memory_2, buffer, i, n);
     cudaDeviceSynchronize();
     std::swap(input_array, global_memory_2);   // output becomes next pass's input
 }
@@ -157,7 +155,6 @@ int* radixSort(int *input, int n){
     cudaFree(buffer);
     cudaFree(input_array);
     cudaFree(global_memory);
-    cudaFree(global_sum);
     cudaFree(global_memory_2);
     return input;
 }
