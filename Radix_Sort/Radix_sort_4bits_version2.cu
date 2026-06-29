@@ -17,6 +17,7 @@ __global__ void HistogramGeneration(int *input, int *global_memory, int current_
 
     int buckets[(1 << bitSize)] = {0};
 
+    
 
     for(int i=(n/total_thread_count)*threadId; i<(n/total_thread_count)*(threadId+1);i++){
         buckets[(input[i] & (mask))>>(4*current_bit_level)]++;  
@@ -27,15 +28,31 @@ __global__ void HistogramGeneration(int *input, int *global_memory, int current_
     }
 
 
+    // __syncthreads();
+
+    // if(threadId==0){
+    // for(int i=0; i<(1 << bitSize)*total_thread_count;i++){
+    //     printf("%d \n",global_memory[i]);
+    // }}
+
     return;
 }
 
 
 // Exclusive Scan Phase
-__global__ void scanPhase(int *input, int *output){
+__global__ void ScanPhase(int *input, int *output){
 
 
     blelloch_scan(input,output, total_thread_count*(1 << bitSize));
+
+
+    __syncthreads();
+
+    if((int)threadIdx.x == 0){
+       for(int i=0; i<(1 << bitSize)*total_thread_count;i++){
+        printf("%d \n",output[i]);
+    }}
+    
     
     return;
 }
@@ -48,17 +65,29 @@ __global__ void scatter(int *input, int *secondary_input, int *output, int n, in
     int threadId = threadIdx.x;
     uint32_t mask = 0xf << (4 * current_bit_level);
 
-    int offset_array[(1 << 5)] = {0};
+    int offset_array[(1 << 4)] = {0};
     
 
-    for(int i=0; i < (1 << 5); i++){
+    for(int i=0; i < (1 << 4); i++){
         offset_array[i]=input[total_thread_count*i + threadId];
     }
 
-      for(int i=(n/total_thread_count)*threadId; i<(n/total_thread_count)*(threadId+1);i++){
-        int digit = (input[i] & (mask)) >> (4 * current_bit_level);
+    // index
+    // 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
+    //
+    // zero
+    // 0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30
+    // 
+    // one
+    // 1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31
 
-        output[offset_array[digit]]=input[i];
+    
+
+
+      for(int i=(n/total_thread_count)*threadId; i<(n/total_thread_count)*(threadId+1);i++){
+        int digit = (secondary_input[i] & (mask)) >> (4 * current_bit_level);
+
+        output[offset_array[digit]]=secondary_input[i];
         offset_array[digit]++;
    
 
@@ -87,13 +116,15 @@ int* radixSort(int* input_array, int n){
     cudaMemcpy(device_input,input_array,sizeof(int)*n,cudaMemcpyHostToDevice);
 
 
-    for(int i=0; i<(32/bitSize);i++){
+    for(int i=0; i<1;i++){
         
         HistogramGeneration<<<1,total_thread_count>>>(device_input,global_memory,i,n);
 
+
+
         cudaDeviceSynchronize();
 
-        scanPhase<<<1,((1<<bitSize)*total_thread_count)/2>>>(global_memory,scanPhase);
+        ScanPhase<<<1,((1<<bitSize)*total_thread_count)/2>>>(global_memory,scanPhase);
 
 
         cudaDeviceSynchronize();
@@ -123,6 +154,7 @@ int main(){
 
      int *input_array = (int *)malloc(sizeof(int)*8);
 
+     // 1, 0, 1, 3, 2, 6, 4, 3
     input_array[0]=1;
     input_array[1]=0;
     input_array[2]=1;

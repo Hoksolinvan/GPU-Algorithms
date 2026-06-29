@@ -78,9 +78,11 @@ __global__ void counting_sort(int *input, int * global_sum, int *global_memory, 
             }
 
 
+            
+
 
     __syncthreads();
-
+        
 
     for(int i=(n/total_thread_count)*threadId; i<(n/total_thread_count)*(threadId+1);i++){
         int digit = input[i] & (mask) ? 1 : 0;
