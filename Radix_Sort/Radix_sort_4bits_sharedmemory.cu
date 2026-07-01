@@ -8,23 +8,42 @@ const int total_thread_count = 2;
 const int bitSize = 4;
 
 
-
 // Histogram Generation Phase
 __global__ void HistogramGeneration(int *input, int *global_memory, int current_bit_level, int n){
+
 
     int threadId = threadIdx.x;
     uint32_t mask = 0xf << (4 * current_bit_level);
 
-    int buckets[(1 << bitSize)] = {0};
+    __shared__ int buckets[(1 << bitSize)*total_thread_count];
 
-    
-
-    for(int i=(n/total_thread_count)*threadId; i<(n/total_thread_count)*(threadId+1);i++){
-        buckets[(input[i] & (mask))>>(4*current_bit_level)]++;  
+    if(threadId < (1 << bitSize)*total_thread_count){
+        buckets[threadId]=0;
     }
 
-    for(int i=0; i<(1<<(bitSize));i++){
-        global_memory[i*total_thread_count + threadId] = buckets[i];
+
+    if(threadId < n/2){
+        buckets[(input[threadId] & mask) >> (4*current_bit_level)]++;
+    }
+    else if(threadId >= n/2 && threadId < n){
+        buckets[((input[threadId] & mask)>>(4*current_bit_level))+(1<<bitSize)]++;
+    }
+
+    // for(int i=(n/total_thread_count)*threadId; i<(n/total_thread_count)*(threadId+1);i++){
+    //     buckets[(input[i] & (mask))>>(4*current_bit_level)]++;  
+    // }
+
+    __syncthreads();
+
+    // if(threadId < (1 << bitSize)*total_thread_count){
+    //     global_memory[(threadId%(1<<bitSize))*total_thread_count+threadId] = buckets[0];
+    // }
+    // for(int i=0; i<(1<<(bitSize));i++){
+    //     global_memory[i*total_thread_count + threadId] = buckets[i];
+    // }
+
+    if(threadId < (1 << bitSize)){
+        
     }
 
 
@@ -64,6 +83,11 @@ __global__ void scatter(int *input, int *secondary_input, int *output, int n, in
 
     int threadId = threadIdx.x;
     uint32_t mask = 0xf << (4 * current_bit_level);
+    __shared__ int temporary_secondary_input[n];
+
+    for(int i=(n/total_thread_count)*threadId; i < (n/total_thread_count)*(threadId+1);i++){
+        temporary_secondary_input[i]=secondary_input[i];
+    }
 
     int offset_array[(1 << 4)] = {0};
     
@@ -85,9 +109,9 @@ __global__ void scatter(int *input, int *secondary_input, int *output, int n, in
 
 
       for(int i=(n/total_thread_count)*threadId; i<(n/total_thread_count)*(threadId+1);i++){
-        int digit = (secondary_input[i] & (mask)) >> (4 * current_bit_level);
+        int digit = (temporary_secondary_input[i] & (mask)) >> (4 * current_bit_level);
 
-        output[offset_array[digit]]=secondary_input[i];
+        output[offset_array[digit]]=temporary_secondary_input[i];
         offset_array[digit]++;
    
 
@@ -118,7 +142,7 @@ int* radixSort(int* input_array, int n){
 
     for(int i=0; i<1;i++){
         
-        HistogramGeneration<<<1,total_thread_count>>>(device_input,global_memory,i,n);
+        HistogramGeneration<<<1,1024>>>(device_input,global_memory,i,n);
 
 
 
