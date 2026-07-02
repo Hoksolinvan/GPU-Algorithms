@@ -16,12 +16,14 @@ __global__ void HistogramGeneration(int *input, int *global_memory, int current_
     uint32_t mask = 0xf << (4 * current_bit_level);
 
     __shared__ int buckets[(1 << bitSize)*total_thread_count];
+    // 16*2 == 32
 
     if(threadId < (1 << bitSize)*total_thread_count){
         buckets[threadId]=0;
     }
 
-
+    __syncthreads();
+    
     if(threadId < n/2){
         buckets[(input[threadId] & mask) >> (4*current_bit_level)]++;
     }
@@ -32,8 +34,30 @@ __global__ void HistogramGeneration(int *input, int *global_memory, int current_
     // for(int i=(n/total_thread_count)*threadId; i<(n/total_thread_count)*(threadId+1);i++){
     //     buckets[(input[i] & (mask))>>(4*current_bit_level)]++;  
     // }
+    __syncthreads();   
+
+    // if(threadId <=0){
+    //     for(int i=0; i<((1 << bitSize)*total_thread_count);i++){
+    //     printf("%d ",buckets[i]);}  
+
+    //     printf("\n");
+    // }
+
+    if(threadId ==0 && current_bit_level==0){
+        for(int i=0; i<(1 << bitSize);i++){
+            printf("%d ",buckets[i]);
+        }
+        printf("\n");
+    }
 
     __syncthreads();
+
+    if(threadId ==1 && current_bit_level==0){
+        for(int j=0; j < (1 <<bitSize);j++){
+            printf("%d ",buckets[j+(1<<bitSize)]);
+        }
+    }
+    
 
     // if(threadId < (1 << bitSize)*total_thread_count){
     //     global_memory[(threadId%(1<<bitSize))*total_thread_count+threadId] = buckets[0];
@@ -42,10 +66,13 @@ __global__ void HistogramGeneration(int *input, int *global_memory, int current_
     //     global_memory[i*total_thread_count + threadId] = buckets[i];
     // }
 
-    if(threadId < (1 << bitSize)){
-        
+    if(threadId < n/2){
+        // global_memory[threadId%(n/2)] = buckets[threadId];
+        global_memory[threadId*2]=buckets[threadId];
     }
-
+    else if(threadId >= n/2 && threadId < n){
+        global_memory[(threadId%(n/2))+1]=buckets[threadId];
+    }
 
     // __syncthreads();
 
@@ -53,6 +80,13 @@ __global__ void HistogramGeneration(int *input, int *global_memory, int current_
     // for(int i=0; i<(1 << bitSize)*total_thread_count;i++){
     //     printf("%d \n",global_memory[i]);
     // }}
+
+    // __syncthreads();
+    //  if(threadId <=0){
+    //     for(int i=0; i<(1 << bitSize)*total_thread_count;i++)
+    //     printf("%d ",global_memory[i]);
+    // }
+
 
     return;
 }
@@ -79,15 +113,11 @@ __global__ void ScanPhase(int *input, int *output){
 
 
 // Scatter phase
+// Scatter phase
 __global__ void scatter(int *input, int *secondary_input, int *output, int n, int current_bit_level){
 
     int threadId = threadIdx.x;
     uint32_t mask = 0xf << (4 * current_bit_level);
-    __shared__ int temporary_secondary_input[n];
-
-    for(int i=(n/total_thread_count)*threadId; i < (n/total_thread_count)*(threadId+1);i++){
-        temporary_secondary_input[i]=secondary_input[i];
-    }
 
     int offset_array[(1 << 4)] = {0};
     
@@ -109,13 +139,14 @@ __global__ void scatter(int *input, int *secondary_input, int *output, int n, in
 
 
       for(int i=(n/total_thread_count)*threadId; i<(n/total_thread_count)*(threadId+1);i++){
-        int digit = (temporary_secondary_input[i] & (mask)) >> (4 * current_bit_level);
+        int digit = (secondary_input[i] & (mask)) >> (4 * current_bit_level);
 
-        output[offset_array[digit]]=temporary_secondary_input[i];
+        output[offset_array[digit]]=secondary_input[i];
         offset_array[digit]++;
    
-
     }
+
+
 
 
     return;
@@ -190,9 +221,9 @@ int main(){
 
      int *output = radixSort(input_array,8);
 
-    for(int i=0; i<8;i++){
-        printf("%d ",output[i]);
-    }
+    // for(int i=0; i<8;i++){
+    //     printf("%d ",output[i]);
+    // }
 
 
 

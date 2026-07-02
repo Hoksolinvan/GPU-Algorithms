@@ -28,12 +28,25 @@ __global__ void HistogramGeneration(int *input, int *global_memory, int current_
     }
 
 
-    // __syncthreads();
+    __syncthreads();
 
-    // if(threadId==0){
-    // for(int i=0; i<(1 << bitSize)*total_thread_count;i++){
-    //     printf("%d \n",global_memory[i]);
-    // }}
+
+    // if(threadId <=0 && current_bit_level==0){
+    //     for(int i=0; i<((1 << bitSize));i++){
+    //         printf("%d ",buckets[i]);
+    //     }
+    //     printf(
+    //         "\n"
+    //     );
+    // }
+
+    
+    // if(threadId <=1 && current_bit_level==0){
+    //     for(int i=0; i<((1 << bitSize));i++){
+    //         printf("%d ",buckets[i]);
+    //     }
+    // }
+    
 
     return;
 }
@@ -166,9 +179,9 @@ int main(){
 
      int *output = radixSort(input_array,8);
 
-    for(int i=0; i<8;i++){
-        printf("%d ",output[i]);
-    }
+    // for(int i=0; i<8;i++){
+    //     printf("%d ",output[i]);
+    // }
 
 
 
