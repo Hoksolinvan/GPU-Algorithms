@@ -8,7 +8,7 @@ const int total_thread_count = 2;
 const int bitSize = 4;
 
 
-// Histogram Generation Phase
+// // Histogram Generation Phase
 __global__ void HistogramGeneration(int *input, int *global_memory, int current_bit_level, int n){
 
 
@@ -25,10 +25,14 @@ __global__ void HistogramGeneration(int *input, int *global_memory, int current_
     __syncthreads();
     
     if(threadId < n/2){
-        buckets[(input[threadId] & mask) >> (4*current_bit_level)]++;
+        int digit = (input[threadId] & mask) >> (4*current_bit_level);
+        atomicAdd(&buckets[digit],1);
+       // buckets[(input[threadId] & mask) >> (4*current_bit_level)]++;
     }
     else if(threadId >= n/2 && threadId < n){
-        buckets[((input[threadId] & mask)>>(4*current_bit_level))+(1<<bitSize)]++;
+        int digit = ((input[threadId] & mask)>>(4*current_bit_level))+(1<<bitSize);
+        atomicAdd(&buckets[digit],1);
+      //  buckets[((input[threadId] & mask)>>(4*current_bit_level))+(1<<bitSize)]++;
     }
 
     // for(int i=(n/total_thread_count)*threadId; i<(n/total_thread_count)*(threadId+1);i++){
@@ -43,20 +47,18 @@ __global__ void HistogramGeneration(int *input, int *global_memory, int current_
     //     printf("\n");
     // }
 
-    if(threadId ==0 && current_bit_level==0){
-        for(int i=0; i<(1 << bitSize);i++){
-            printf("%d ",buckets[i]);
-        }
-        printf("\n");
-    }
+    // if(threadId ==0 && current_bit_level==0){
+    //     for(int i=0; i<(1 << bitSize);i++){
+    //         printf("%d ",buckets[i]);
+    //     }
+    //     printf("\n");
+    // }
 
-    __syncthreads();
-
-    if(threadId ==1 && current_bit_level==0){
-        for(int j=0; j < (1 <<bitSize);j++){
-            printf("%d ",buckets[j+(1<<bitSize)]);
-        }
-    }
+    // if(threadId ==1 && current_bit_level==0){
+    //     for(int j=0; j < (1 <<bitSize);j++){
+    //         printf("%d ",buckets[j+(1<<bitSize)]);
+    //     }
+    // }
     
 
     // if(threadId < (1 << bitSize)*total_thread_count){
@@ -66,15 +68,29 @@ __global__ void HistogramGeneration(int *input, int *global_memory, int current_
     //     global_memory[i*total_thread_count + threadId] = buckets[i];
     // }
 
-    if(threadId < n/2){
-        // global_memory[threadId%(n/2)] = buckets[threadId];
-        global_memory[threadId*2]=buckets[threadId];
+    // if(threadId < (1<<bitSize)){
+    //     // global_memory[threadId%(n/2)] = buckets[threadId];
+    //     global_memory[threadId*2]=buckets[threadId];
+    // }
+    // else if(threadId < ((1<<bitSize)*2)){
+    //     global_memory[(threadId%(n/2))+1]=buckets[threadId];
+    // }
+
+
+    if(threadId <=1){
+        
+    for(int i=0; i<(1<<(bitSize));i++){
+        global_memory[i*total_thread_count + threadId] = buckets[threadId * (1<<bitSize) + i];
     }
-    else if(threadId >= n/2 && threadId < n){
-        global_memory[(threadId%(n/2))+1]=buckets[threadId];
     }
 
-    // __syncthreads();
+    __syncthreads();
+
+    if(threadId==0 && current_bit_level==0){
+     for(int i = threadId; i < (1 << bitSize) * total_thread_count; i ++){
+        printf("%d ", global_memory[i]);
+    }
+}
 
     // if(threadId==0){
     // for(int i=0; i<(1 << bitSize)*total_thread_count;i++){
@@ -90,6 +106,8 @@ __global__ void HistogramGeneration(int *input, int *global_memory, int current_
 
     return;
 }
+
+
 
 
 // Exclusive Scan Phase

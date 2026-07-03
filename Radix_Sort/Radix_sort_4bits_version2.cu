@@ -41,12 +41,17 @@ __global__ void HistogramGeneration(int *input, int *global_memory, int current_
     // }
 
     
-    // if(threadId <=1 && current_bit_level==0){
+    // if(threadId ==1 && current_bit_level==0){
     //     for(int i=0; i<((1 << bitSize));i++){
     //         printf("%d ",buckets[i]);
     //     }
     // }
     
+    if(threadId==0 && current_bit_level==0){
+     for(int i = threadId; i < (1 << bitSize) * total_thread_count; i ++){
+        printf("%d ", global_memory[i]);
+    }
+}
 
     return;
 }
