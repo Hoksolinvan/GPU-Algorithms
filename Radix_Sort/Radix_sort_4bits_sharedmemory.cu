@@ -1,5 +1,6 @@
 #include "cuda_runtime.h"
 #include "../Blelloch.hpp"
+
 #include <cmath>
 
 #define CCCL_IGNORE_MSVC_TRADITIONAL_PREPROCESSOR_WARNING
@@ -77,7 +78,7 @@ __global__ void HistogramGeneration(int *input, int *global_memory, int current_
 __global__ void ScanPhase(int *input, int *output){
 
 
-    blelloch_scan(input,output, total_thread_count*(1 << bitSize));
+    blelloch_scan_shared(input,output, total_thread_count*(1 << bitSize));
     
     
     return;
