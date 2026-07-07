@@ -61,11 +61,11 @@ __global__ void HistogramGeneration(int *input, int *global_memory, int current_
 
     __syncthreads();
 
-    if(threadId==0 && current_bit_level==0){
-     for(int i = threadId; i < (1 << bitSize) * total_thread_count; i ++){
-        printf("%d ", global_memory[i]);
-    }
-}
+//     if(threadId==0 && current_bit_level==0){
+//      for(int i = threadId; i < (1 << bitSize) * total_thread_count; i ++){
+//         printf("%d ", global_memory[i]);
+//     }
+// }
 
     return;
 }
@@ -86,11 +86,67 @@ __global__ void ScanPhase(int *input, int *output){
 
 
 // Scatter phase
-// Scatter phase
+__global__ void scatterShared(int *input, int *secondary_input, int *output, int n, int current_bit_level){
+
+    int threadId = threadIdx.x;
+    uint32_t mask = 0xf << (4 * current_bit_level);
+
+    __shared__ int sharedInput[(1<<bitSize)*total_thread_count];
+    __shared__ int sharedSecondaryInput[(1<<bitSize)*total_thread_count];
+
+    if(threadId <(1<<bitSize)*total_thread_count){
+    // sharedInput[threadId*2+1]=input[threadId*2+1];
+
+    if(threadId < n){
+    sharedSecondaryInput[threadId]=secondary_input[threadId];
+    }
+
+    sharedInput[threadId]=input[threadId];
+    // sharedSecondaryInput[threadId*2+1]=secondary_input[threadId*2+1];
+    }
+    __syncthreads();
+
+
+    if(threadId <=1){
+    int offset_array[(1 << 4)] = {0};
+    
+
+    for(int i=0; i < (1 << 4); i++){
+        offset_array[i]=sharedInput[total_thread_count*i + threadId];
+    }
+
+    // index
+    // 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
+    //
+    // zero
+    // 0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30
+    // 
+    // one
+    // 1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31
+
+    
+
+
+      for(int i=(n/total_thread_count)*threadId; i<(n/total_thread_count)*(threadId+1);i++){
+        int digit = (sharedSecondaryInput[i] & (mask)) >> (4 * current_bit_level);
+
+        output[offset_array[digit]]=sharedSecondaryInput[i];
+        offset_array[digit]++;
+   
+    }
+    }
+
+
+
+    return;
+}
+
+
 __global__ void scatter(int *input, int *secondary_input, int *output, int n, int current_bit_level){
 
     int threadId = threadIdx.x;
     uint32_t mask = 0xf << (4 * current_bit_level);
+
 
     int offset_array[(1 << 4)] = {0};
     
@@ -157,8 +213,8 @@ int* radixSort(int* input_array, int n){
 
         cudaDeviceSynchronize();
 
-        scatter<<<1,total_thread_count>>>(scanPhase, device_input, scatterOutput,n, i);
-
+       //scatter<<<1,total_thread_count>>>(scanPhase, device_input, scatterOutput,n, i);
+       scatterShared<<<1,1024>>>(scanPhase,device_input,scatterOutput,n,i);
         cudaDeviceSynchronize();
 
 
@@ -194,9 +250,9 @@ int main(){
 
      int *output = radixSort(input_array,8);
 
-    // for(int i=0; i<8;i++){
-    //     printf("%d ",output[i]);
-    // }
+    for(int i=0; i<8;i++){
+        printf("%d ",output[i]);
+    }
 
 
 
