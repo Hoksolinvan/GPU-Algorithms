@@ -16,7 +16,6 @@ __global__ void HistogramGeneration(int *input, int *global_memory, int current_
     uint32_t mask = 0xf << (4 * current_bit_level);
 
     __shared__ int buckets[(1 << bitSize)*total_thread_count];
-    // 16*2 == 32
 
     if(threadId < (1 << bitSize)*total_thread_count){
         buckets[threadId]=0;
@@ -35,17 +34,8 @@ __global__ void HistogramGeneration(int *input, int *global_memory, int current_
       //  buckets[((input[threadId] & mask)>>(4*current_bit_level))+(1<<bitSize)]++;
     }
 
-    // for(int i=(n/total_thread_count)*threadId; i<(n/total_thread_count)*(threadId+1);i++){
-    //     buckets[(input[i] & (mask))>>(4*current_bit_level)]++;  
-    // }
     __syncthreads();   
 
-    // if(threadId <=0){
-    //     for(int i=0; i<((1 << bitSize)*total_thread_count);i++){
-    //     printf("%d ",buckets[i]);}  
-
-    //     printf("\n");
-    // }
 
     // if(threadId ==0 && current_bit_level==0){
     //     for(int i=0; i<(1 << bitSize);i++){
@@ -60,21 +50,6 @@ __global__ void HistogramGeneration(int *input, int *global_memory, int current_
     //     }
     // }
     
-
-    // if(threadId < (1 << bitSize)*total_thread_count){
-    //     global_memory[(threadId%(1<<bitSize))*total_thread_count+threadId] = buckets[0];
-    // }
-    // for(int i=0; i<(1<<(bitSize));i++){
-    //     global_memory[i*total_thread_count + threadId] = buckets[i];
-    // }
-
-    // if(threadId < (1<<bitSize)){
-    //     // global_memory[threadId%(n/2)] = buckets[threadId];
-    //     global_memory[threadId*2]=buckets[threadId];
-    // }
-    // else if(threadId < ((1<<bitSize)*2)){
-    //     global_memory[(threadId%(n/2))+1]=buckets[threadId];
-    // }
 
 
     if(threadId <=1){
@@ -92,18 +67,6 @@ __global__ void HistogramGeneration(int *input, int *global_memory, int current_
     }
 }
 
-    // if(threadId==0){
-    // for(int i=0; i<(1 << bitSize)*total_thread_count;i++){
-    //     printf("%d \n",global_memory[i]);
-    // }}
-
-    // __syncthreads();
-    //  if(threadId <=0){
-    //     for(int i=0; i<(1 << bitSize)*total_thread_count;i++)
-    //     printf("%d ",global_memory[i]);
-    // }
-
-
     return;
 }
 
@@ -115,14 +78,6 @@ __global__ void ScanPhase(int *input, int *output){
 
 
     blelloch_scan(input,output, total_thread_count*(1 << bitSize));
-
-
-    // __syncthreads();
-
-    // if((int)threadIdx.x == 0){
-    //    for(int i=0; i<(1 << bitSize)*total_thread_count;i++){
-    //     printf("%d \n",output[i]);
-    // }}
     
     
     return;
