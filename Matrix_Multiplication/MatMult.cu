@@ -25,6 +25,32 @@ __global__ void matmult(int* A, int* B, int* C){
     return;
 }
 
+
+__global__ void matmultsingle(int* A, int* B, int* C, int y_offset,int x_offset){
+  __shared__ int As[TILE_SIZE][TILE_SIZE];
+  __shared__ int Bs[TILE_SIZE][TILE_SIZE];
+
+  int row = y_offset * TILE_SIZE + threadIdx.y;
+  int col = x_offset * TILE_SIZE + threadIdx.x;
+  int sum = 0;
+
+  
+  for(int t= 0; t < dimension/TILE_SIZE; t++){
+    As[threadIdx.y][threadIdx.x] = A[row*dimension + t*TILE_SIZE + threadIdx.x];
+    Bs[threadIdx.y][threadIdx.x] = B[(t*TILE_SIZE+threadIdx.y) * dimension+col];
+   // Bs[threadIdx.y][threadIdx.x] = B[row*dimension+t*TILE_SIZE+threadIdx.x];
+    __syncthreads();
+    for(int k=0; k<TILE_SIZE; k++){
+      sum+= As[threadIdx.y][k] * Bs[k][threadIdx.x];
+    }
+    __syncthreads();
+  }
+
+
+  C[row * dimension + col] = sum;
+  return;
+}
+
 void printMatrix(int* mat) {
     for (int i = 0; i < dimension; i++) {
         for (int j = 0; j < dimension; j++)
