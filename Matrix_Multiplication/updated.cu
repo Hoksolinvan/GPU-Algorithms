@@ -3,8 +3,18 @@
 #include <random>
 
 
-#define TILE_SIZE 4
-#define dimension 8
+#define TILE_SIZE 16
+#define dimension 1024
+
+#define CUDA_CHECK(call) \
+    do { \
+        cudaError_t error = call; \
+        if (error != cudaSuccess) { \
+            std::cerr << "CUDA Error: " << cudaGetErrorString(error) \
+                      << " in " << __FILE__ << " at line " << __LINE__ << std::endl; \
+            exit(EXIT_FAILURE); \
+        } \
+    } while (0)
 
 
 __global__ void matrix_multiplication_naive(const int* A, const int* B, int* C) {
@@ -22,63 +32,10 @@ for(int i=0; i<dimension; i++){
 C[row*dimension+col] = sum;
 
 
+
 }
 
 
-// __global__ void matrix_multiplication_warp(const int* A, const int* B, int* C){
-
-//    int lane = threadIdx.x;
-
-
-//    int row = blockIdx.y;
-//    int col = blockIdx.x;
-//    int sum = 0;
-
-//    for(int i=0; i<dimension;i+=32){
-
-//     int offset = i+lane;
-
-
-//     int cur_value = 0;
-
-//     if(offset < dimension){
-//     cur_value+=A[row*dimension + i] * B[i*dimension+col];
-
-//     }
-
-
-//     cur_value += __shfl_down_sync(0xffffffff,16);
-//     cur_value += __shfl_down_sync(0xffffffff,8);
-//     cur_value += __shfl_down_sync(0xffffffff,4);
-//     cur_value += __shfl_down_sync(0xffffffff,2);
-//     cur_value += __shfl_down_sync(0xffffffff,1);
-
-
-//     if(lane==0){
-//         sum+=cur_value;
-//     }
-
-//    }
-
-
-
-
-
-//     if(lane == 0){
-//         c[dimension*row+col] = sum;
-//     }
-
-
-// }
-
-void printMatrix(int* mat) {
-    for (int i = 0; i < dimension; i++) {
-        for (int j = 0; j < dimension; j++)
-            std::cout << mat[i * dimension + j] << " ";
-        std::cout << std::endl;
-    }
-    std::cout << std::endl;
-}
 
 
 
@@ -87,10 +44,14 @@ __global__ void shared_memory_matrix(const int* A, const int* B, int* C){
     __shared__ int A_shared[TILE_SIZE][TILE_SIZE];
     __shared__ int B_shared[TILE_SIZE][TILE_SIZE];
 
+    //__shared__ int acc[TILE_SIZE];
+
     int acc[TILE_SIZE] = {0};
 
+    unsigned int mask = __activemask();
+
     int row = blockIdx.y * TILE_SIZE + threadIdx.y;
-    int col = blockIdx.x * TILE_SIZE + threadIdx.x;
+    // int col = blockIdx.x * TILE_SIZE + threadIdx.x;
 
     
 
@@ -98,14 +59,10 @@ __global__ void shared_memory_matrix(const int* A, const int* B, int* C){
     for(int i=0; i<dimension/TILE_SIZE;i++){
         
 
-        // for (int j = 0; j < TILE_SIZE; j++) {
+        // coallesced memory data load
         A_shared[threadIdx.y][threadIdx.x] = A[row * dimension + i * TILE_SIZE + threadIdx.x];
-        //}
-
-       
-       // for (int j = 0; j < TILE_SIZE; j++) {
         B_shared[threadIdx.y][threadIdx.x] = B[(i * TILE_SIZE + threadIdx.y) * dimension + blockIdx.x * TILE_SIZE + threadIdx.x];
-        //}
+
 
 
         // synchronizes entire thread block
@@ -122,7 +79,7 @@ __global__ void shared_memory_matrix(const int* A, const int* B, int* C){
             for(int k=TILE_SIZE/2; k >= 1 ; k/=2){
 
 
-                term +=__shfl_down_sync(0x0000FFFF,term,k,TILE_SIZE);
+                term +=__shfl_down_sync(mask,term,k,TILE_SIZE);
             }
 
 
@@ -141,11 +98,29 @@ __global__ void shared_memory_matrix(const int* A, const int* B, int* C){
 
 
     if (threadIdx.x == 0) {
+
+        #pragma unroll 
         for (int j = 0; j < TILE_SIZE; j++) {
             C[row * dimension + blockIdx.x * TILE_SIZE + j] = acc[j];
         }
     }
 
+
+    // if(threadIdx.x < TILE_SIZE){
+    //     C[row * dimension + blockIdx.x * TILE_SIZE + threadIdx.x] = acc[threadIdx.x];
+    // }
+}
+
+
+
+
+void printMatrix(int* mat) {
+    for (int i = 0; i < dimension; i++) {
+        for (int j = 0; j < dimension; j++)
+            std::cout << mat[i * dimension + j] << " ";
+        std::cout << std::endl;
+    }
+    std::cout << std::endl;
 }
 
 
@@ -159,9 +134,9 @@ int main() {
     int *device_matrixB;
     int *device_matrixC;
 
-    cudaMalloc(&device_matrixA, sizeof(int)*dimension*dimension);
-    cudaMalloc(&device_matrixB, sizeof(int)*dimension*dimension);
-    cudaMalloc(&device_matrixC, sizeof(int)*dimension*dimension);
+    CUDA_CHECK(cudaMalloc(&device_matrixA, sizeof(int)*dimension*dimension));
+    CUDA_CHECK(cudaMalloc(&device_matrixB, sizeof(int)*dimension*dimension));
+    CUDA_CHECK(cudaMalloc(&device_matrixC, sizeof(int)*dimension*dimension));
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<int> int_dist(1, 10);
@@ -170,28 +145,28 @@ int main() {
         matrixA[i]=int_dist(gen);
         matrixB[i]=int_dist(gen);
     }
-    cudaMemcpy(device_matrixA,matrixA,sizeof(int)*dimension*dimension,cudaMemcpyHostToDevice);
-    cudaMemcpy(device_matrixB,matrixB,sizeof(int)*dimension*dimension,cudaMemcpyHostToDevice);
+    CUDA_CHECK(cudaMemcpy(device_matrixA, matrixA, sizeof(int)*dimension*dimension, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(device_matrixB, matrixB, sizeof(int)*dimension*dimension, cudaMemcpyHostToDevice));
 
     dim3 blockDim(TILE_SIZE, TILE_SIZE, 1);
     dim3 gridDim(dimension/TILE_SIZE, dimension/TILE_SIZE, 1);
-    shared_memory_matrix<<<gridDim, blockDim>>>(device_matrixA, device_matrixB, device_matrixC);
-    cudaDeviceSynchronize();
+    matmult<<<gridDim, blockDim>>>(device_matrixA, device_matrixB, device_matrixC);
+    CUDA_CHECK(cudaDeviceSynchronize());
 
-    cudaMemcpy(result, device_matrixC, sizeof(int)*dimension*dimension, cudaMemcpyDeviceToHost);
+    CUDA_CHECK(cudaMemcpy(result, device_matrixC, sizeof(int)*dimension*dimension, cudaMemcpyDeviceToHost));
 
-    std::cout << "Matrix A:" << std::endl;
-    printMatrix(matrixA);
-    std::cout << "Matrix B:" << std::endl;
-    printMatrix(matrixB);
-    std::cout << "Result:" << std::endl;
-    printMatrix(result);
+    // std::cout << "Matrix A:" << std::endl;
+    // printMatrix(matrixA);
+    // std::cout << "Matrix B:" << std::endl;
+    // printMatrix(matrixB);
+    // std::cout << "Result:" << std::endl;
+    // printMatrix(result);
 
     delete[] matrixA;
     delete[] matrixB;
     delete[] result;
-    cudaFree(device_matrixA);
-    cudaFree(device_matrixB);
-    cudaFree(device_matrixC);
+    CUDA_CHECK(cudaFree(device_matrixA));
+    CUDA_CHECK(cudaFree(device_matrixB));
+    CUDA_CHECK(cudaFree(device_matrixC));
     return 0;
 }
