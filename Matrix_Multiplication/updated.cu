@@ -1,3 +1,75 @@
+#include <iostream>
+#include <cuda_runtime.h>
+#include <random>
+
+
+#define TILE_SIZE 4
+#define dimension 8
+
+
+__global__ void matrix_multiplication_naive(const int* A, const int* B, int* C) {
+
+
+int row = blockIdx.y * blockDim.y + threadIdx.y;
+int col = blockIdx.x * blockDim.x + threadIdx.x;
+
+int sum = 0;
+for(int i=0; i<dimension; i++){
+   sum += A[row*dimension + i] * B[i*dimension+col];
+}
+
+
+C[row*dimension+col] = sum;
+
+
+}
+
+
+// __global__ void matrix_multiplication_warp(const int* A, const int* B, int* C){
+
+//    int lane = threadIdx.x;
+
+
+//    int row = blockIdx.y;
+//    int col = blockIdx.x;
+//    int sum = 0;
+
+//    for(int i=0; i<dimension;i+=32){
+
+//     int offset = i+lane;
+
+
+//     int cur_value = 0;
+
+//     if(offset < dimension){
+//     cur_value+=A[row*dimension + i] * B[i*dimension+col];
+
+//     }
+
+
+//     cur_value += __shfl_down_sync(0xffffffff,16);
+//     cur_value += __shfl_down_sync(0xffffffff,8);
+//     cur_value += __shfl_down_sync(0xffffffff,4);
+//     cur_value += __shfl_down_sync(0xffffffff,2);
+//     cur_value += __shfl_down_sync(0xffffffff,1);
+
+
+//     if(lane==0){
+//         sum+=cur_value;
+//     }
+
+//    }
+
+
+
+
+
+//     if(lane == 0){
+//         c[dimension*row+col] = sum;
+//     }
+
+
+// }
 
 void printMatrix(int* mat) {
     for (int i = 0; i < dimension; i++) {
@@ -8,7 +80,6 @@ void printMatrix(int* mat) {
     std::cout << std::endl;
 }
 
-#define tx threadIdx.x
 
 
 __global__ void shared_memory_matrix(const int* A, const int* B, int* C){
@@ -16,22 +87,24 @@ __global__ void shared_memory_matrix(const int* A, const int* B, int* C){
     __shared__ int A_shared[TILE_SIZE][TILE_SIZE];
     __shared__ int B_shared[TILE_SIZE][TILE_SIZE];
 
-    int result[TILE_SIZE] = {0};
+    int acc[TILE_SIZE] = {0};
 
     int row = blockIdx.y * TILE_SIZE + threadIdx.y;
     int col = blockIdx.x * TILE_SIZE + threadIdx.x;
+
+    
 
 
     for(int i=0; i<dimension/TILE_SIZE;i++){
         
 
         // for (int j = 0; j < TILE_SIZE; j++) {
-        A_shared[threadIdx.y][threadIdx.x] =A[row * dimension + i * TILE_SIZE + threadIdx.x];
+        A_shared[threadIdx.y][threadIdx.x] = A[row * dimension + i * TILE_SIZE + threadIdx.x];
         //}
 
        
        // for (int j = 0; j < TILE_SIZE; j++) {
-        B_shared[threadIdx.y][threadIdx.x] =B[(i * TILE_SIZE + threadIdx.y) * dimension + blockIdx.x * TILE_SIZE + threadIdx.x];
+        B_shared[threadIdx.y][threadIdx.x] = B[(i * TILE_SIZE + threadIdx.y) * dimension + blockIdx.x * TILE_SIZE + threadIdx.x];
         //}
 
 
@@ -41,36 +114,36 @@ __global__ void shared_memory_matrix(const int* A, const int* B, int* C){
 
         // each thread handle 1 row. Therefore, if our tile is 4x4 then we have four threads
         
-       if(!(threadIdx.x % TILE_SIZE) ){
-        int temp[TILE_SIZE] = {0};
+        int term = 0;
+        for(int j = 0; j<TILE_SIZE;j++){
 
-        // load current row based on thread and all that
-        
-        for(int j=0; j<TILE_SIZE;j++){
-            temp[j] = A_shared[threadIdx.y][j];
-        }
+            term = A_shared[threadIdx.y][threadIdx.x] * B_shared[threadIdx.x][j];
 
-        
+            for(int k=TILE_SIZE/2; k >= 1 ; k/=2){
 
-        for(int j=0; j<TILE_SIZE;j++){
 
-            for(int k=0; k<TILE_SIZE;k++){
-                result[j] += temp[k] * B_shared[k][j];
+                term +=__shfl_down_sync(0x0000FFFF,term,k,TILE_SIZE);
             }
-           
-      }
 
+
+            if (threadIdx.x == 0) {
+                acc[j] += term;
+            }
+            
         }
+
+
+        __syncthreads();
+     
+        
     }
 
 
-    if(!(threadIdx.x % TILE_SIZE)){
-    for(int i=0; i < TILE_SIZE; i++){
-      int cur_row = blockIdx.y * TILE_SIZE + threadIdx.y;
-        int cur_col = blockIdx.x * TILE_SIZE + i;
 
-        C[cur_row * dimension + cur_col] = result[i];
-    }
+    if (threadIdx.x == 0) {
+        for (int j = 0; j < TILE_SIZE; j++) {
+            C[row * dimension + blockIdx.x * TILE_SIZE + j] = acc[j];
+        }
     }
 
 }
