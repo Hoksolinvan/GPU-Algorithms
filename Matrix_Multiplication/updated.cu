@@ -3,8 +3,8 @@
 #include <random>
 
 
-#define TILE_SIZE 16
-#define dimension 1024
+#define TILE_SIZE 2
+#define dimension 4
 
 #define CUDA_CHECK(call) \
     do { \
@@ -17,45 +17,23 @@
     } while (0)
 
 
-__global__ void matrix_multiplication_naive(const int* A, const int* B, int* C) {
-
-
-int row = blockIdx.y * blockDim.y + threadIdx.y;
-int col = blockIdx.x * blockDim.x + threadIdx.x;
-
-int sum = 0;
-for(int i=0; i<dimension; i++){
-   sum += A[row*dimension + i] * B[i*dimension+col];
-}
-
-
-C[row*dimension+col] = sum;
-
-
-
-}
 
 
 
 
-
-__global__ void shared_memory_matrix(const int* A, const int* B, int* C){
+__global__ void shared_memory_with_warp_matrix(const int* A, const int* B, int* C){
 
     __shared__ int A_shared[TILE_SIZE][TILE_SIZE];
     __shared__ int B_shared[TILE_SIZE][TILE_SIZE];
 
-    //__shared__ int acc[TILE_SIZE];
 
     int acc[TILE_SIZE] = {0};
 
     unsigned int mask = __activemask();
 
     int row = blockIdx.y * TILE_SIZE + threadIdx.y;
-    // int col = blockIdx.x * TILE_SIZE + threadIdx.x;
 
     
-
-
     for(int i=0; i<dimension/TILE_SIZE;i++){
         
 
@@ -69,9 +47,9 @@ __global__ void shared_memory_matrix(const int* A, const int* B, int* C){
         __syncthreads();
 
 
-        // each thread handle 1 row. Therefore, if our tile is 4x4 then we have four threads
         
         int term = 0;
+
         for(int j = 0; j<TILE_SIZE;j++){
 
             term = A_shared[threadIdx.y][threadIdx.x] * B_shared[threadIdx.x][j];
@@ -84,7 +62,7 @@ __global__ void shared_memory_matrix(const int* A, const int* B, int* C){
 
 
             if (threadIdx.x == 0) {
-                acc[j] += term;
+               acc[j] += term;
             }
             
         }
@@ -106,9 +84,34 @@ __global__ void shared_memory_matrix(const int* A, const int* B, int* C){
     }
 
 
-    // if(threadIdx.x < TILE_SIZE){
-    //     C[row * dimension + blockIdx.x * TILE_SIZE + threadIdx.x] = acc[threadIdx.x];
-    // }
+}
+
+
+__global__ void shared_memory_matrix(const int* A, const int* B, int* C){
+
+    
+    __shared__ int A_shared[TILE_SIZE][TILE_SIZE];
+    __shared__ int B_shared[TILE_SIZE][TILE_SIZE];
+
+
+    int row = blockIdx.y * TILE_SIZE + threadIdx.y;
+
+    for(int i=0; i<dimension/TILE_SIZE;i++){
+        
+
+        A_shared[threadIdx.y][threadIdx.x] = A[row * dimension + i * TILE_SIZE + threadIdx.x];
+        B_shared[threadIdx.y][threadIdx.x] = B[(i * TILE_SIZE + threadIdx.y) * dimension + blockIdx.x * TILE_SIZE + threadIdx.x];
+
+        __syncthreads();
+
+
+        for(int j = 0; j<TILE_SIZE;j++){
+            C[row * dimension + blockIdx.x * TILE_SIZE + threadIdx.x] += A_shared[threadIdx.y][j] * B_shared[j][threadIdx.x];
+        }
+
+
+}
+
 }
 
 
@@ -150,17 +153,17 @@ int main() {
 
     dim3 blockDim(TILE_SIZE, TILE_SIZE, 1);
     dim3 gridDim(dimension/TILE_SIZE, dimension/TILE_SIZE, 1);
-    matmult<<<gridDim, blockDim>>>(device_matrixA, device_matrixB, device_matrixC);
+    shared_memory_with_warp_matrix<<<gridDim, blockDim>>>(device_matrixA, device_matrixB, device_matrixC);
     CUDA_CHECK(cudaDeviceSynchronize());
 
     CUDA_CHECK(cudaMemcpy(result, device_matrixC, sizeof(int)*dimension*dimension, cudaMemcpyDeviceToHost));
 
-    // std::cout << "Matrix A:" << std::endl;
-    // printMatrix(matrixA);
-    // std::cout << "Matrix B:" << std::endl;
-    // printMatrix(matrixB);
-    // std::cout << "Result:" << std::endl;
-    // printMatrix(result);
+    std::cout << "Matrix A:" << std::endl;
+    printMatrix(matrixA);
+    std::cout << "Matrix B:" << std::endl;
+    printMatrix(matrixB);
+    std::cout << "Result:" << std::endl;
+    printMatrix(result);
 
     delete[] matrixA;
     delete[] matrixB;
