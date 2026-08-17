@@ -1,11 +1,11 @@
 #include <iostream>
 #include <cuda_runtime.h>
 #include <random>
-#include <cooperative_groups.h>
-#include <cooperative_groups/reduce.h>
+// #include <cooperative_groups.h>
+// #include <cooperative_groups/reduce.h>
 
 
-#define cg cooperative_groups
+// #define cg cooperative_groups
 
 
 #define TILE_SIZE 16
@@ -29,7 +29,7 @@
 __global__ void shared_memory_with_warp_matrix(const int* A, const int* B, int* C){
 
   
-    __shared__ int A_shared[TILE_SIZE][TILE_SIZE];
+    __shared__ int A_shared[TILE_SIZE][TILE_SIZE+1];
     __shared__ int B_shared[TILE_SIZE][TILE_SIZE];
 
     int acc[TILE_SIZE] = {0};
@@ -70,9 +70,9 @@ __global__ void shared_memory_with_warp_matrix(const int* A, const int* B, int* 
                 term +=__shfl_down_sync(__activemask(),term,k,TILE_SIZE);
             }
 
-
+            
             if (threadIdx.x == 0) {
-                acc[j] += term;
+                  acc[j] += term;
             }
             
         }
@@ -93,63 +93,63 @@ __global__ void shared_memory_with_warp_matrix(const int* A, const int* B, int* 
 }
 
 
-__global__ void shared_memory_with_warp_matrix_second(const int* A, const int* B, int* C){
+// __global__ void shared_memory_with_warp_matrix_second(const int* A, const int* B, int* C){
 
-    __shared__ int A_shared[TILE_SIZE][TILE_SIZE];
-    __shared__ int B_shared[TILE_SIZE][TILE_SIZE];
-
-
-    int acc[TILE_SIZE] = {0};
-
-    int row = blockIdx.y * TILE_SIZE + threadIdx.y;
-
-    cg::thread_block block = cg::this_thread_block();
-    cg::thread_block_tile<TILE_SIZE> tile = cg::tiled_partition<TILE_SIZE>(block);
+//     __shared__ int A_shared[TILE_SIZE][TILE_SIZE];
+//     __shared__ int B_shared[TILE_SIZE][TILE_SIZE];
 
 
-    for(int i=0; i<dimension/TILE_SIZE;i++){
+//     int acc[TILE_SIZE] = {0};
+
+//     int row = blockIdx.y * TILE_SIZE + threadIdx.y;
+
+//     cg::thread_block block = cg::this_thread_block();
+//     cg::thread_block_tile<TILE_SIZE> tile = cg::tiled_partition<TILE_SIZE>(block);
+
+
+//     for(int i=0; i<dimension/TILE_SIZE;i++){
         
 
-        A_shared[threadIdx.y][threadIdx.x] = __ldg(&A[row * dimension + i * TILE_SIZE + threadIdx.x]);
-        B_shared[threadIdx.y][threadIdx.x] = __ldg(&B[(i * TILE_SIZE + threadIdx.y) * dimension + blockIdx.x * TILE_SIZE + threadIdx.x]);
+//         A_shared[threadIdx.y][threadIdx.x] = __ldg(&A[row * dimension + i * TILE_SIZE + threadIdx.x]);
+//         B_shared[threadIdx.y][threadIdx.x] = __ldg(&B[(i * TILE_SIZE + threadIdx.y) * dimension + blockIdx.x * TILE_SIZE + threadIdx.x]);
 
 
 
-        block.sync();
+//         block.sync();
 
 
         
-        int term = 0;
+//         int term = 0;
 
-        for(int j = 0; j<TILE_SIZE;j++){
+//         for(int j = 0; j<TILE_SIZE;j++){
             
-            term = A_shared[threadIdx.y][threadIdx.x] * B_shared[threadIdx.x][j];
+//             term = A_shared[threadIdx.y][threadIdx.x] * B_shared[threadIdx.x][j];
 
-            term = cg::reduce(tile, term, cg::plus<int>());
+//             term = cg::reduce(tile, term, cg::plus<int>());
             
 
 
-            if (tile.thread_rank() == 0) {
-               acc[j] += term;
-            }
+//             if (tile.thread_rank() == 0) {
+//                acc[j] += term;
+//             }
             
-        }
+//         }
 
 
      
         
-    }
+//     }
 
-    if (tile.thread_rank() == 0) {
-        for(int j = 0; j<TILE_SIZE;j++){
-            C[row * dimension + blockIdx.x * TILE_SIZE + j] = acc[j];
-        }
-    }
+//     if (tile.thread_rank() == 0) {
+//         for(int j = 0; j<TILE_SIZE;j++){
+//             C[row * dimension + blockIdx.x * TILE_SIZE + j] = acc[j];
+//         }
+//     }
     
 
 
 
-}
+// }
 
 
 __global__ void shared_memory_matrix(const int* A, const int* B, int* C){
@@ -218,18 +218,20 @@ int main() {
 
     dim3 blockDim(TILE_SIZE, TILE_SIZE, 1);
     dim3 gridDim(dimension/TILE_SIZE, dimension/TILE_SIZE, 1);
-    shared_memory_with_warp_matrix_second<<<gridDim, blockDim>>>(device_matrixA, device_matrixB, device_matrixC);
-    //shared_memory_matrix<<<gridDim, blockDim>>>(device_matrixA, device_matrixB, device_matrixC);
+        shared_memory_with_warp_matrix<<<gridDim, blockDim>>>(device_matrixA, device_matrixB, device_matrixC);
+
+   // shared_memory_with_warp_matrix_second<<<gridDim, blockDim>>>(device_matrixA, device_matrixB, device_matrixC);
+    shared_memory_matrix<<<gridDim, blockDim>>>(device_matrixA, device_matrixB, device_matrixC);
     CUDA_CHECK(cudaDeviceSynchronize());
 
     CUDA_CHECK(cudaMemcpy(result, device_matrixC, sizeof(int)*dimension*dimension, cudaMemcpyDeviceToHost));
 
-    std::cout << "Matrix A:" << std::endl;
-    printMatrix(matrixA);
-    std::cout << "Matrix B:" << std::endl;
-    printMatrix(matrixB);
-    std::cout << "Result:" << std::endl;
-    printMatrix(result);
+    // std::cout << "Matrix A:" << std::endl;
+    // printMatrix(matrixA);
+    // std::cout << "Matrix B:" << std::endl;
+    // printMatrix(matrixB);
+    // std::cout << "Result:" << std::endl;
+    // printMatrix(result);
 
     delete[] matrixA;
     delete[] matrixB;
